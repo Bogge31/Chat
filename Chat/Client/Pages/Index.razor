@@ -1,0 +1,66 @@
+﻿@page "/"
+@inject NavigationManager navigationManager
+@using Microsoft.AspNetCore.SignalR.Client
+
+<div>
+    @foreach (var message in Messages)
+    {
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">@message.From</h5>
+                <h6 class="card-subtitle mb-2 text-muted">@message.At.ToShortDateString()</h6>
+                <p class="card-text">@message.Message</p>
+            </div>
+        </div>
+    }
+</div>
+
+<div>
+    <h3>@ts.ToString()</h3>
+    <div class="form-group">
+        <label>Your Name</label>
+        <input class="form-control" @bind="Name" />
+    </div>
+    <div class="form-group">
+        <label>Message</label>
+        <textarea rows="5" class="form-control" @bind="Message"></textarea>
+    </div>
+    <input type="button" class="btn btn-primary" value="Send" @onclick="SendMessageAsync" />
+</div>
+
+@code {
+    TimeSpan ts = new TimeSpan(0, 15, 0);
+    public List<Chat.Shared.ChatMessage> Messages = new List<Chat.Shared.ChatMessage>();
+    public string Name { get; set; } = "Jeff";
+    public string Message { get; set; }
+    private HubConnection hubConnection;
+
+    protected async override Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(navigationManager.BaseUri + "chatHub")
+            .Build();
+        await hubConnection.StartAsync();
+
+        hubConnection.On<Chat.Shared.ChatMessage>("ChatSent", (data) =>
+        {
+            Messages.Add(data);
+            StateHasChanged();
+        });
+        var stillTicking = true;
+        var count = 0;
+        while (stillTicking)
+        {
+            await Task.Delay(1000);
+            ts = ts.Subtract(new TimeSpan(0, 0, 1));
+            StateHasChanged();
+            stillTicking = count++ == 10;
+        }
+    }
+
+    public async Task SendMessageAsync()
+    {
+        Console.WriteLine($"{Name} is sending {Message}");
+        await hubConnection.SendAsync("SendChat", Name, Message);
+    }
+}
